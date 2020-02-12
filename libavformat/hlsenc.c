@@ -238,8 +238,8 @@ typedef struct HLSContext {
     AVIOContext *sub_m3u8_out;
     int64_t timeout;
     int ignore_io_errors;
-    char *headers;
     int lhls;
+    char *headers;
     int has_default_key; /* has DEFAULT field of var_stream_map */
     int has_video_m3u8; /* has video stream m3u8 list */
 } HLSContext;
@@ -1502,8 +1502,7 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs, char *pre
         ret = ff_hls_write_file_entry(byterange_mode ? hls->m3u8_out : vs->out, en->discont, byterange_mode,
                                       en->duration, hls->flags & HLS_ROUND_DURATIONS,
                                       en->size, en->pos, vs->baseurl,
-
-                                      en->filename, prog_date_time_p, en->keyframe_size, en->keyframe_pos, hls->flags & HLS_I_FRAMES_ONLY, 0));
+                                      en->filename, prog_date_time_p, en->keyframe_size, en->keyframe_pos, hls->flags & HLS_I_FRAMES_ONLY, 0);
         if (ret < 0) {
             av_log(s, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
         }
@@ -1511,15 +1510,14 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs, char *pre
 
     if (prefetch_url)
         ret = en ?
-              ff_hls_write_file_entry(hls->m3u8_out, en->discont, byterange_mode,
+              ff_hls_write_file_entry(byterange_mode ? hls->m3u8_out : vs->out, en->discont, byterange_mode,
                                       en->duration, hls->flags & HLS_ROUND_DURATIONS,
                                       en->size, en->pos, vs->baseurl,
-                                      prefetch_url, prog_date_time_p, en->keyframe_size, en->keyframe_pos, hls->flags & HLS_I_FRAMES_ONLY, 0, 1) :
-              ff_hls_write_file_entry(hls->m3u8_out, 0, byterange_mode,
+                                      prefetch_url, prog_date_time_p, en->keyframe_size, en->keyframe_pos, hls->flags & HLS_I_FRAMES_ONLY, 1) :
+              ff_hls_write_file_entry(byterange_mode ? hls->m3u8_out : vs->out, 0, byterange_mode,
                                       0, hls->flags & HLS_ROUND_DURATIONS,
                                       0, 0, vs->baseurl,
-                                      prefetch_url, prog_date_time_p, en->keyframe_size, en->keyframe_pos, hls->flags & HLS_I_FRAMES_ONLY, 0, 1);
-
+                                      prefetch_url, prog_date_time_p, en->keyframe_size, en->keyframe_pos, hls->flags & HLS_I_FRAMES_ONLY, 1);
     if (last && (hls->flags & HLS_OMIT_ENDLIST)==0)
         ff_hls_write_end_list(byterange_mode ? hls->m3u8_out : vs->out);
 
@@ -1535,7 +1533,7 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs, char *pre
         for (en = vs->segments; en; en = en->next) {
             ret = ff_hls_write_file_entry(hls->sub_m3u8_out, 0, byterange_mode,
                                           en->duration, 0, en->size, en->pos,
-                                          vs->baseurl, en->sub_filename, NULL, 0, 0, 0, 0);
+                                          vs->baseurl, en->sub_filename, NULL, 0, 0, 0, 0, 0);
             if (ret < 0) {
                 av_log(s, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
             }
@@ -2353,11 +2351,6 @@ static int hls_write_packet(AVFormatContext *s, AVPacket *pkt)
             }
         }
 
-<<<<<<< HEAD
-        if (oc->url[0]) {
-            proto = avio_find_protocol_name(oc->url);
-            use_temp_file = proto && !strcmp(proto, "file") && (hls->flags & HLS_TEMP_FILE);
-        }
 
         if (hls->flags & HLS_SINGLE_FILE) {
             ret = flush_dynbuf(vs, &range_length);
@@ -2376,20 +2369,6 @@ static int hls_write_packet(AVFormatContext *s, AVPacket *pkt)
                     filename = av_asprintf("crypto:%s", oc->url);
                 } else {
                     filename = av_asprintf("%s", oc->url);
-=======
-        // look to rename the asset name
-        if (use_temp_file) {
-            if (!(hls->flags & HLS_SINGLE_FILE) || (hls->max_seg_size <= 0))
-                if ((vs->avf->oformat->priv_class && vs->avf->priv_data) && hls->segment_type != SEGMENT_TYPE_FMP4)
-                    av_opt_set(vs->avf->priv_data, "mpegts_flags", "resend_headers", 0);
-        }
-
-        if (hls->segment_type == SEGMENT_TYPE_FMP4) {
-            if (hls->flags & HLS_SINGLE_FILE) {
-                ret = flush_dynbuf(vs, &range_length);
-                if (ret < 0) {
-                    return ret;
->>>>>>> avformat/hlsenc: Port support for LHLS from lavf/dashenc
                 }
                 if (!filename) {
                     av_dict_free(&options);
@@ -2453,15 +2432,16 @@ static int hls_write_packet(AVFormatContext *s, AVPacket *pkt)
 
         // if we're building a VOD playlist, skip writing the manifest multiple times, and just wait until the end
         if (hls->pl_type != PLAYLIST_TYPE_VOD) {
-            if ((ret = hls_window(s, 0, vs)) < 0) {
+            if ((ret = hls_window(s, 0, vs, NULL)) < 0) {
                 av_log(s, AV_LOG_WARNING, "upload playlist failed, will retry with a new http session.\n");
                 ff_format_io_close(s, &vs->out);
                 vs->out = NULL;
-                if ((ret = hls_window(s, 0, vs)) < 0) {
+                if ((ret = hls_window(s, 0, vs, NULL)) < 0) {
                     av_freep(&old_filename);
                     return ret;
                 }
             }
+            vs->m3u8_got_prefetch = 0;
         }
 
         if (hls->flags & HLS_SINGLE_FILE) {
@@ -2490,16 +2470,7 @@ static int hls_write_packet(AVFormatContext *s, AVPacket *pkt)
             return ret;
         }
 
-<<<<<<< HEAD
-=======
-        // if we're building a VOD playlist, skip writing the manifest multiple times, and just wait until the end
-        if (hls->pl_type != PLAYLIST_TYPE_VOD) {
-            if ((ret = hls_window(s, 0, vs, NULL)) < 0) {
-                return ret;
-            }
-            vs->m3u8_got_prefetch = 0;
-        }
-    } else if (hls->lhls && !use_temp_file && !byterange_mode &&
+    }else if (hls->lhls && !use_temp_file && !byterange_mode &&
                !vs->m3u8_got_prefetch) {
         if (hls->pl_type != PLAYLIST_TYPE_VOD) {
             if ((ret = hls_window(s, 0, vs, (char *)av_basename(oc->url))) < 0) {
@@ -2507,7 +2478,6 @@ static int hls_write_packet(AVFormatContext *s, AVPacket *pkt)
             }
             vs->m3u8_got_prefetch = 1;
         }
->>>>>>> avformat/hlsenc: Port support for LHLS from lavf/dashenc
     }
 
     vs->packets_written++;
@@ -2678,19 +2648,14 @@ failed:
             vs->size = avio_tell(vs->vtt_avf->pb) - vs->start_pos;
             ff_format_io_close(s, &vtt_oc->pb);
         }
-        ret = hls_window(s, 1, vs);
+        ret = hls_window(s, 1, vs, NULL);
         if (ret < 0) {
             av_log(s, AV_LOG_WARNING, "upload playlist failed, will retry with a new http session.\n");
             ff_format_io_close(s, &vs->out);
-            hls_window(s, 1, vs);
+            hls_window(s, 1, vs, NULL);
         }
         ffio_free_dyn_buf(&oc->pb);
 
-<<<<<<< HEAD
-=======
-        vs->avf = NULL;
-        hls_window(s, 1, vs, NULL);
->>>>>>> avformat/hlsenc: Port support for LHLS from lavf/dashenc
         av_free(old_filename);
     }
 
@@ -3107,11 +3072,8 @@ static const AVOption options[] = {
     {"http_persistent", "Use persistent HTTP connections", OFFSET(http_persistent), AV_OPT_TYPE_BOOL, {.i64 = 0 }, 0, 1, E },
     {"timeout", "set timeout for socket I/O operations", OFFSET(timeout), AV_OPT_TYPE_DURATION, { .i64 = -1 }, -1, INT_MAX, .flags = E },
     {"ignore_io_errors", "Ignore IO errors for stable long-duration runs with network output", OFFSET(ignore_io_errors), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, E },
-<<<<<<< HEAD
     {"headers", "set custom HTTP headers, can override built in default headers", OFFSET(headers), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, E },
-=======
-    { "lhls", "Enable low-latency HLS (experimental). Adds #EXT-X-PREFETCH tag with current segment's URI", OFFSET(lhls), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, E },
->>>>>>> avformat/hlsenc: Port support for LHLS from lavf/dashenc
+    {"lhls", "Enable low-latency HLS (experimental). Adds #EXT-X-PREFETCH tag with current segment's URI", OFFSET(lhls), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, E },
     { NULL },
 };
 
