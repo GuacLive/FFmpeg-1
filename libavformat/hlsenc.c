@@ -1509,7 +1509,7 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs, char *pre
     }
 
     if (prefetch_filename) {
-        ret = ff_hls_write_prefetch(hls->m3u8_out : vs->out, en ? en->discont : 0,
+        ret = ff_hls_write_prefetch(byterange_mode ? hls->m3u8_out : vs->out, en ? en->discont : 0,
                                     vs->baseurl, prefetch_filename);
         if (ret < 0) {
             av_log(s, AV_LOG_WARNING, "ff_hls_write_prefetch got error\n");
@@ -1531,7 +1531,7 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs, char *pre
         for (en = vs->segments; en; en = en->next) {
             ret = ff_hls_write_file_entry(hls->sub_m3u8_out, 0, byterange_mode,
                                           en->duration, 0, en->size, en->pos,
-                                          vs->baseurl, en->sub_filename, NULL, 0, 0, 0, 0);
+                                          vs->baseurl, en->sub_filename, NULL, 0, 0, 0);
             if (ret < 0) {
                 av_log(s, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
             }
