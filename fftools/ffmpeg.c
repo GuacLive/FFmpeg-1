@@ -1647,8 +1647,7 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
 {
     AVBPrint buf, buf_script;
     OutputStream *ost;
-    AVFormatContext *oc;
-    int64_t total_size;
+    int64_t total_size = 0;
     AVCodecContext *enc;
     int frame_number, vid, i;
     double bitrate;
@@ -1675,13 +1674,6 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
     }
 
     t = (cur_time-timer_start) / 1000000.0;
-
-
-    oc = output_files[0]->ctx;
-
-    total_size = avio_size(oc->pb);
-    if (total_size <= 0) // FIXME improve avio_size() so it works with non seekable output too
-        total_size = avio_tell(oc->pb);
 
     vid = 0;
     av_bprint_init(&buf, 0, AV_BPRINT_SIZE_AUTOMATIC);
@@ -1757,6 +1749,9 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
                                           ost->st->time_base, AV_TIME_BASE_Q));
         if (is_last_report)
             nb_frames_drop += ost->last_dropped;
+
+        total_size += ost->data_size;
+        total_size += ost->enc_ctx->extradata_size;
     }
 
     secs = FFABS(pts) / AV_TIME_BASE;
