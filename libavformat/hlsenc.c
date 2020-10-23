@@ -178,7 +178,8 @@ typedef struct VariantStream {
     int m3u8_created; /* status of media play-list creation */
     int is_default; /* default status of audio group */
     char *language; /* audio lauguage name */
-    char *agroup; /* audio group name */
+    char *agroup;   /* audio group name */
+    char *sgroup;   /* subtitle group name */
     char *ccgroup; /* closed caption group name */
     char *baseurl;
     char *varname; // variant name
