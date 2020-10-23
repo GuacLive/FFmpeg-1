@@ -71,7 +71,7 @@ static int wtvfile_read_packet(void *opaque, uint8_t *buf, int buf_size)
 {
     WtvFile *wf = opaque;
     AVIOContext *pb = wf->pb_filesystem;
-    int nread = 0;
+    int nread = 0, n = 0;
 
     if (wf->error || pb->error)
         return -1;
@@ -80,7 +80,6 @@ static int wtvfile_read_packet(void *opaque, uint8_t *buf, int buf_size)
 
     buf_size = FFMIN(buf_size, wf->length - wf->position);
     while(nread < buf_size) {
-        int n;
         int remaining_in_sector = (1 << wf->sector_bits) - (wf->position & ((1 << wf->sector_bits) - 1));
         int read_request        = FFMIN(buf_size - nread, remaining_in_sector);
 
@@ -100,7 +99,7 @@ static int wtvfile_read_packet(void *opaque, uint8_t *buf, int buf_size)
             }
         }
     }
-    return nread;
+    return nread ? nread : n;
 }
 
 /**
@@ -272,6 +271,11 @@ static AVIOContext * wtvfile_open2(AVFormatContext *s, const uint8_t *buf, int b
         if (name_size < 0) {
             av_log(s, AV_LOG_ERROR,
                    "bad filename length, remaining directory entries ignored\n");
+            break;
+        }
+        if (dir_length == 0) {
+            av_log(s, AV_LOG_ERROR,
+                   "bad dir length, remaining directory entries ignored\n");
             break;
         }
         if (48 + (int64_t)name_size > buf_end - buf) {
